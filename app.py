@@ -1,41 +1,48 @@
 import streamlit as st
 import random
 import pandas as pd
-import qrcode
-from io import BytesIO
 import datetime
 import os
 from triage_basico import evaluar_triage
 
-# st.set_page_config: Configura la pestaña del navegador.
 st.set_page_config(page_title="Sistema Integral de Triage", page_icon="🏥", layout="wide")
 
 ARCHIVO_CSV = "historial_triage.csv"
 
 # ==========================================
-# 1. FUNCIONES DE BASE DE DATOS
+# 1. GENERADOR DE ID ÚNICO
+# ==========================================
+def generar_id_caso():
+    """
+    Genera un ID único para el paciente. 
+    Usamos random.randint para obtener un número entre 1000 y 9999,
+    y le concatenamos la letra 'P' (de Paciente). Ejemplo: P4592.
+    """
+    numero = random.randint(1000, 9999)
+    return f"P{numero}"
+
+# ==========================================
+# 2. FUNCIONES DE BASE DE DATOS
 # ==========================================
 def inicializar_csv():
     if not os.path.exists(ARCHIVO_CSV):
-        df_vacio = pd.DataFrame(columns=["Fecha", "Usuario", "Nivel_ESI", "Tiempo_Espera", "Estado"])
+        # Añadimos la nueva columna 'ID_Caso' al inicio de la tabla
+        df_vacio = pd.DataFrame(columns=["ID_Caso", "Fecha", "Usuario", "Nivel_ESI", "Tiempo_Espera", "Estado"])
         df_vacio.to_csv(ARCHIVO_CSV, index=False)
 
 def cargar_datos():
     return pd.read_csv(ARCHIVO_CSV)
 
-def guardar_nuevo_paciente(usuario, nivel, tiempo, estado="Auto-Triage"):
-    """
-    Guarda un paciente nuevo. Hemos añadido el parámetro 'estado' con un valor por defecto.
-    Si se omite, será 'Auto-Triage' (pacientes desde su app), pero el médico puede pasar 'Atendido'.
-    """
+def guardar_nuevo_paciente(id_caso, usuario, nivel, tiempo, estado="Auto-Triage"):
     df = cargar_datos()
     fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     nuevo_registro = {
+        "ID_Caso": id_caso, # Guardamos el ID en la base de datos
         "Fecha": fecha_actual,
         "Usuario": usuario,
         "Nivel_ESI": nivel,
         "Tiempo_Espera": tiempo,
-        "Estado": estado # Usamos la variable para permitir flexibilidad
+        "Estado": estado
     }
     df_nuevo = pd.DataFrame([nuevo_registro])
     df = pd.concat([df, df_nuevo], ignore_index=True)
@@ -47,9 +54,8 @@ def actualizar_estado(index):
     df.to_csv(ARCHIVO_CSV, index=False)
 
 # ==========================================
-# 2. FUNCIONES LÓGICAS COMPARTIDAS
+# 3. FUNCIONES LÓGICAS COMPARTIDAS
 # ==========================================
-# Hemos extraído la lógica de cálculo de tiempo a una función para no escribirla dos veces.
 def calcular_tiempo_estimado(resultado_nivel):
     if "Nivel 1" in resultado_nivel: tiempo_base = 0
     elif "Nivel 2" in resultado_nivel: tiempo_base = 15
@@ -61,13 +67,7 @@ def calcular_tiempo_estimado(resultado_nivel):
     tiempo_estimado = int(tiempo_base * carga_actual)
     return tiempo_estimado, tiempo_base, carga_actual
 
-# Extraemos la lógica de adaptación del formulario a la función original
 def procesar_datos_y_evaluar(fiebre, dif_respirar, dolor_pecho, nivel_dolor, dias):
-    """
-    Esta función es el 'puente' que permite reutilizar evaluar_triage().
-    Tanto la Vista Paciente como la Vista Médica usan botones Sí/No y sliders.
-    Esta función los convierte en "severa", "moderada", etc., y llama a evaluar_triage().
-    """
     respiracion = "severa" if dif_respirar == "Sí" else "ninguna"
     if dolor_pecho:
         if nivel_dolor >= 8: pecho = "severo"
@@ -76,7 +76,6 @@ def procesar_datos_y_evaluar(fiebre, dif_respirar, dolor_pecho, nivel_dolor, dia
     else:
         pecho = "ninguno"
         
-    # Reutilización clave: llamamos a la misma función importada de triage_basico.py
     return evaluar_triage(
         fiebre=fiebre,
         dificultad_respiratoria=respiracion,
@@ -84,9 +83,8 @@ def procesar_datos_y_evaluar(fiebre, dif_respirar, dolor_pecho, nivel_dolor, dia
         tiempo_con_sintomas=dias
     )
 
-
 # ==========================================
-# 3. COMPONENTES DE VISTA (REFACTORIZACIÓN)
+# 4. COMPONENTES DE VISTA
 # ==========================================
 def mostrar_vista_paciente():
     st.title("🏥 Asistente Virtual de Triage")
@@ -109,18 +107,26 @@ def mostrar_vista_paciente():
         if not nombre_paciente:
             st.error("Ingrese su nombre para generar su registro.")
         else:
-            # Reutilizamos nuestra función puente
+            # Evaluamos
             resultado = procesar_datos_y_evaluar(fiebre_input, dificultad_respirar, tiene_dolor_pecho, nivel_dolor, tiempo_sintomas)
             nivel_corto = resultado.split(":")[0]
-            
-            # Reutilizamos el cálculo de tiempo
             tiempo_estimado, tiempo_base, carga = calcular_tiempo_estimado(resultado)
             
-            # Guardamos por defecto como "Auto-Triage"
-            guardar_nuevo_paciente(nombre_paciente, nivel_corto, tiempo_estimado)
+            # Generamos el ID Único
+            id_paciente = generar_id_caso()
+            
+            # Guardamos en CSV
+            guardar_nuevo_paciente(id_paciente, nombre_paciente, nivel_corto, tiempo_estimado)
             
             st.markdown("---")
             st.subheader("Resultado de la Evaluación:")
+            
+            # Mostramos el ID de forma muy llamativa
+            st.success("¡Triage completado con éxito!")
+            st.markdown(f"### Tu Número de Caso es: **{id_paciente}**")
+            st.write("Por favor, memoriza este número o tómale una captura de pantalla. Serás llamado con este código.")
+            
+            st.markdown("---")
             if "Nivel 1" in resultado or "Nivel 2" in resultado: st.error(resultado)
             elif "Nivel 3" in resultado: st.warning(resultado)
             else: st.success(resultado)
@@ -129,16 +135,6 @@ def mostrar_vista_paciente():
                 st.metric(label="Tiempo Estimado de Espera", value=f"{tiempo_estimado} min")
             else:
                 st.metric(label="Tiempo Estimado de Espera", value="Inmediato")
-            
-            st.markdown("### 📱 Tu Código QR de Pre-Ingreso")
-            qr_data = f"Paciente: {nombre_paciente}\nPrioridad: {nivel_corto}\nMinutos Espera: {tiempo_estimado}"
-            qr = qrcode.QRCode(version=1, box_size=10, border=5)
-            qr.add_data(qr_data)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="#1E1E1E", back_color="white")
-            buf = BytesIO()
-            img.save(buf, format="PNG")
-            st.image(buf, width=250)
 
 def mostrar_vista_medica():
     st.title("🩺 Panel de Control Médico")
@@ -152,7 +148,6 @@ def mostrar_vista_medica():
     with col2: st.metric(label="⏳ En Sala de Espera", value=len(df_espera))
     st.markdown("---")
     
-    # st.tabs nos permite crear navegación por pestañas dentro de la misma página
     tab_espera, tab_manual = st.tabs(["📋 Pacientes en Espera", "➕ Nuevo Triage Manual"])
     
     # --- PESTAÑA 1: LISTA DE ESPERA ---
@@ -161,44 +156,58 @@ def mostrar_vista_medica():
         if df_espera.empty:
             st.success("No hay pacientes esperando de la app móvil.")
         else:
-            st.dataframe(df_espera, use_container_width=True, hide_index=True)
-            st.markdown("#### Validar Signos Vitales y Atender")
-            opciones = {f"{row['Usuario']} - {row['Nivel_ESI']}": index for index, row in df_espera.iterrows()}
-            paciente_seleccionado = st.selectbox("Seleccione al paciente:", list(opciones.keys()))
-            indice_real = opciones[paciente_seleccionado]
-            nivel_original_str = df.at[indice_real, "Nivel_ESI"]
-            nivel_original_num = int(nivel_original_str[6])
+            # Buscador por ID (Filtro)
+            st.markdown("#### Búsqueda de Paciente")
+            busqueda = st.text_input("Ingrese el ID del caso (ej: P1234) o deje en blanco para ver todos:")
             
-            with st.form("form_signos_vitales"):
-                colA, colB, colC = st.columns(3)
-                with colA: sistolica = st.number_input("Presión Sistólica", 0, 300, 120)
-                with colB: spo2 = st.number_input("Saturación O2", 0, 100, 98)
-                with colC: hr = st.number_input("Frec. Cardíaca", 0, 300, 75)
-                btn_validar = st.form_submit_button("Validar Signos y Marcar como 'Atendido'")
+            # Filtramos la tabla si hay texto en la búsqueda
+            if busqueda:
+                # convertimos todo a mayúsculas para evitar errores de tipeo
+                df_mostrar = df_espera[df_espera["ID_Caso"].str.contains(busqueda.upper(), na=False)]
+            else:
+                df_mostrar = df_espera
                 
-            if btn_validar:
-                if spo2 < 90 or sistolica > 200 or sistolica < 80 or hr > 130 or hr < 40: nuevo_nivel = 1
-                elif spo2 < 94 or sistolica > 160 or sistolica < 90 or hr > 110 or hr < 50: nuevo_nivel = 2
-                else: nuevo_nivel = 3
+            if df_mostrar.empty:
+                st.warning("No se encontró ningún paciente con ese ID en la sala de espera.")
+            else:
+                st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+                
+                st.markdown("#### Validar Signos Vitales y Atender")
+                # El selectbox ahora muestra el ID primero de forma clara
+                opciones = {f"[{row['ID_Caso']}] {row['Usuario']} - {row['Nivel_ESI']}": index for index, row in df_mostrar.iterrows()}
+                paciente_seleccionado = st.selectbox("Seleccione al paciente para validar:", list(opciones.keys()))
+                indice_real = opciones[paciente_seleccionado]
+                nivel_original_str = df.at[indice_real, "Nivel_ESI"]
+                nivel_original_num = int(nivel_original_str[6])
+                
+                with st.form("form_signos_vitales"):
+                    colA, colB, colC = st.columns(3)
+                    with colA: sistolica = st.number_input("Presión Sistólica", 0, 300, 120)
+                    with colB: spo2 = st.number_input("Saturación O2", 0, 100, 98)
+                    with colC: hr = st.number_input("Frec. Cardíaca", 0, 300, 75)
+                    btn_validar = st.form_submit_button("Validar Signos y Marcar como 'Atendido'")
                     
-                if nuevo_nivel < nivel_original_num:
-                    st.error(f"🚨 PRIORIDAD AJUSTADA. Nivel {nivel_original_num} ➡️ Nivel {nuevo_nivel}.")
-                    df_temp = cargar_datos()
-                    df_temp.at[indice_real, "Nivel_ESI"] = f"Nivel {nuevo_nivel} - Ajustado"
-                    df_temp.to_csv(ARCHIVO_CSV, index=False)
-                
-                actualizar_estado(indice_real)
-                st.rerun()
+                if btn_validar:
+                    if spo2 < 90 or sistolica > 200 or sistolica < 80 or hr > 130 or hr < 40: nuevo_nivel = 1
+                    elif spo2 < 94 or sistolica > 160 or sistolica < 90 or hr > 110 or hr < 50: nuevo_nivel = 2
+                    else: nuevo_nivel = 3
+                        
+                    if nuevo_nivel < nivel_original_num:
+                        st.error(f"🚨 PRIORIDAD AJUSTADA. Nivel {nivel_original_num} ➡️ Nivel {nuevo_nivel}.")
+                        df_temp = cargar_datos()
+                        df_temp.at[indice_real, "Nivel_ESI"] = f"Nivel {nuevo_nivel} - Ajustado"
+                        df_temp.to_csv(ARCHIVO_CSV, index=False)
+                    
+                    actualizar_estado(indice_real)
+                    st.rerun()
 
     # --- PESTAÑA 2: TRIAGE MANUAL ---
     with tab_manual:
         st.subheader("Ingreso Manual por Personal Médico")
-        st.info("Utilice este formulario para pacientes que llegan directo a ventanilla sin usar la App móvil.")
         
         with st.form("form_triage_manual"):
             nombre_manual = st.text_input("Nombre del Paciente:")
             
-            # Mismas preguntas que el paciente, para poder reutilizar evaluar_triage
             st.markdown("**1. Cuestionario de Síntomas:**")
             colX, colY = st.columns(2)
             with colX:
@@ -222,22 +231,19 @@ def mostrar_vista_medica():
             if not nombre_manual:
                 st.error("Ingrese el nombre del paciente.")
             else:
-                # 1. Obtenemos nivel base por cuestionario (Reutilizando código!)
                 res_cuestionario = procesar_datos_y_evaluar(fiebre_m, dif_res_m, dolor_p_m, nivel_d_m, dias_m)
                 nivel_cuestionario = int(res_cuestionario.split(":")[0][6])
                 
-                # 2. Obtenemos nivel por signos vitales
                 if spo2_m < 90 or sis_m > 200 or sis_m < 80 or hr_m > 130 or hr_m < 40: nivel_signos = 1
                 elif spo2_m < 94 or sis_m > 160 or sis_m < 90 or hr_m > 110 or hr_m < 50: nivel_signos = 2
                 else: nivel_signos = 3
                 
-                # 3. Nos quedamos con el nivel MÁS GRAVE (el número más bajo)
                 nivel_final = min(nivel_cuestionario, nivel_signos)
                 etiqueta_nivel = f"Nivel {nivel_final} - Triage Presencial"
                 
-                # 4. Guardamos DIRECTO como 'Atendido'
-                guardar_nuevo_paciente(nombre_manual, etiqueta_nivel, "0 (Ya en centro)", estado="Atendido")
-                st.success(f"Paciente {nombre_manual} ingresado exitosamente como {etiqueta_nivel}.")
+                id_paciente_manual = generar_id_caso()
+                guardar_nuevo_paciente(id_paciente_manual, nombre_manual, etiqueta_nivel, "0 (Ya en centro)", estado="Atendido")
+                st.success(f"Paciente {nombre_manual} ingresado exitosamente como {etiqueta_nivel} con ID {id_paciente_manual}.")
                 st.rerun()
 
     st.markdown("---")
@@ -247,7 +253,7 @@ def mostrar_vista_medica():
 
 
 # ==========================================
-# 4. ENRUTADOR PRINCIPAL (START)
+# 5. ENRUTADOR PRINCIPAL
 # ==========================================
 inicializar_csv()
 
