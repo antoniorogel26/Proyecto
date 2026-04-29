@@ -1,0 +1,22 @@
+ID_Caso,Timestamp,Responsable,Tipo_Accion,Descripcion
+P5257,2026-04-29 14:00:15,Doctor Perez,Registro,Ingreso al sistema clasificado como Nivel 2.
+P5257,2026-04-29 14:00:15,Doctor Perez,Traslado,Enviado a Sala de Espera.
+P3049,2026-04-29 14:00:29,Doctor Perez,Registro,Ingreso al sistema clasificado como Nivel 2.
+P3049,2026-04-29 14:00:29,Doctor Perez,Traslado,Enviado a Sala de Espera.
+P6801,2026-04-29 14:00:44,Doctor Perez,Registro,Ingreso al sistema clasificado como Nivel 2.
+P6801,2026-04-29 14:00:44,Doctor Perez,Traslado,Enviado a Sala de Espera.
+P4964,2026-04-29 14:01:04,Doctor Perez,Registro,Ingreso al sistema clasificado como Nivel 2.
+P4964,2026-04-29 14:01:04,Doctor Perez,Traslado,Enviado a Sala de Espera.
+P3581,2026-04-29 14:01:39,Sistema,Registro,Ingreso al sistema clasificado como Nivel 1.
+P3581,2026-04-29 14:01:39,Sistema,Traslado,Enviado a Sala de Espera.
+P3581,2026-04-29 14:02:04,Sistema,Traslado,Trasladado desde Sala de Espera hacia Box 1.
+P5257,2026-04-29 14:03:47,Sistema,Traslado,Trasladado desde Sala de Espera hacia Box 2.
+P5257,2026-04-29 14:03:50,Sistema,Alta,Alta médica desde Box 2.
+P8181,2026-04-29 14:05:11,Sistema,Registro,Ingreso al sistema clasificado como Nivel 1.
+P8181,2026-04-29 14:05:11,Sistema,Traslado,Ingreso directo a Box 8.
+P8376,2026-04-29 14:12:11,Enf. Rojas,Registro,Ingreso al sistema clasificado como Nivel 1.
+P8376,2026-04-29 14:12:11,Enf. Rojas,Traslado,Enviado a Sala de Espera.
+P8376,2026-04-29 14:12:24,Enf. Rojas,Traslado,Trasladado desde Sala de Espera hacia Box 4.
+P8376,2026-04-29 14:12:40,Dr. House,Procedimiento,
+P8376,2026-04-29 14:12:54,Dr. House,Evaluación Médica,
+P8376,2026-04-29 14:13:06,Dr. House,Alerta,Solicitud de Insumos: 
